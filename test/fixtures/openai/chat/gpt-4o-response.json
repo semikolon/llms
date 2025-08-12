@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-123456789",
+  "object": "chat.completion",
+  "created": 1704067200,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Quantum computing uses the principles of quantum mechanics to process information. Unlike regular computers that use bits (0 or 1), quantum computers use quantum bits or 'qubits' that can be both 0 and 1 simultaneously. This allows them to solve certain complex problems much faster than traditional computers."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 12,
+    "completion_tokens": 48,
+    "total_tokens": 60
+  }
+}

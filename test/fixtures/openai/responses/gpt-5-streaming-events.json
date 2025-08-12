@@ -1,0 +1,86 @@
+[
+  {
+    "event": "response.created",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response\",\"created\":1704067200,\"model\":\"gpt-5\"}"
+  },
+  {
+    "event": "reasoning.delta",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response.delta\",\"delta\":{\"reasoning_content\":\"Let me think about this question. The user is asking about the capital of France. This is a straightforward geographical question. France is a country in Western Europe, and its capital city is Paris. Paris has been the capital since 987 AD.\"}}"
+  },
+  {
+    "event": "reasoning.delta", 
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response.delta\",\"delta\":{\"reasoning_content\":\" I should provide a clear, accurate answer about Paris being the capital, and perhaps add some brief context about its significance.\"}}"
+  },
+  {
+    "event": "output.delta",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response.delta\",\"delta\":{\"content\":\"The\"}}"
+  },
+  {
+    "event": "output.delta",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response.delta\",\"delta\":{\"content\":\" capital\"}}"
+  },
+  {
+    "event": "output.delta",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response.delta\",\"delta\":{\"content\":\" of\"}}"
+  },
+  {
+    "event": "output.delta",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response.delta\",\"delta\":{\"content\":\" France\"}}"
+  },
+  {
+    "event": "output.delta",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response.delta\",\"delta\":{\"content\":\" is\"}}"
+  },
+  {
+    "event": "output.delta",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response.delta\",\"delta\":{\"content\":\" Paris.\"}}"
+  },
+  {
+    "event": "output.delta",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response.delta\",\"delta\":{\"content\":\" Paris\"}}"
+  },
+  {
+    "event": "output.delta",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response.delta\",\"delta\":{\"content\":\" has\"}}"
+  },
+  {
+    "event": "output.delta",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response.delta\",\"delta\":{\"content\":\" been\"}}"
+  },
+  {
+    "event": "output.delta",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response.delta\",\"delta\":{\"content\":\" the\"}}"
+  },
+  {
+    "event": "output.delta",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response.delta\",\"delta\":{\"content\":\" capital\"}}"
+  },
+  {
+    "event": "output.delta",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response.delta\",\"delta\":{\"content\":\" city\"}}"
+  },
+  {
+    "event": "output.delta",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response.delta\",\"delta\":{\"content\":\" of\"}}"
+  },
+  {
+    "event": "output.delta",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response.delta\",\"delta\":{\"content\":\" France\"}}"
+  },
+  {
+    "event": "output.delta",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response.delta\",\"delta\":{\"content\":\" since\"}}"
+  },
+  {
+    "event": "output.delta",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response.delta\",\"delta\":{\"content\":\" 987\"}}"
+  },
+  {
+    "event": "output.delta",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response.delta\",\"delta\":{\"content\":\" AD.\"}}"
+  },
+  {
+    "event": "response.completed",
+    "data": "{\"id\":\"resp_123456789\",\"object\":\"response\",\"created\":1704067200,\"model\":\"gpt-5\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"The capital of France is Paris. Paris has been the capital city of France since 987 AD.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":8,\"completion_tokens\":18,\"reasoning_tokens\":150,\"total_tokens\":176}}"
+  }
+]

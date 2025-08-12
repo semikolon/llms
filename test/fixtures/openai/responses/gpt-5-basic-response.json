@@ -1,0 +1,22 @@
+{
+  "id": "resp_123456789",
+  "object": "response",
+  "created": 1704067200,
+  "model": "gpt-5",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "The capital of France is Paris. Paris has been the capital city of France since 987 AD and is the country's largest city, serving as its political, economic, and cultural center."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 8,
+    "completion_tokens": 32,
+    "reasoning_tokens": 150,
+    "total_tokens": 190
+  }
+}

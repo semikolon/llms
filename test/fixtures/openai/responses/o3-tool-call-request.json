@@ -1,0 +1,38 @@
+{
+  "model": "o3-mini",
+  "input": [
+    {
+      "role": "user",
+      "content": "What's the weather like in New York today?"
+    }
+  ],
+  "stream": true,
+  "max_completion_tokens": 200,
+  "temperature": 0.3,
+  "reasoning_effort": "high",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get current weather information for a city",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": "string",
+              "description": "The city name"
+            },
+            "units": {
+              "type": "string", 
+              "enum": ["celsius", "fahrenheit"],
+              "description": "Temperature units"
+            }
+          },
+          "required": ["city"]
+        }
+      }
+    }
+  ],
+  "tool_choice": "auto"
+}

@@ -1,0 +1,18 @@
+[
+  {
+    "event": "response.created",
+    "data": "{\"id\":\"resp_tool_123\",\"object\":\"response\",\"created\":1704067200,\"model\":\"o3-mini\"}"
+  },
+  {
+    "event": "reasoning.delta",
+    "data": "{\"id\":\"resp_tool_123\",\"object\":\"response.delta\",\"delta\":{\"reasoning_content\":\"The user is asking about the weather in NYC. I need to use the get_weather tool to retrieve current weather information for New York City.\"}}"
+  },
+  {
+    "event": "tool_calls",
+    "data": "{\"id\":\"resp_tool_123\",\"delta\":{\"tool_calls\":[{\"id\":\"call_weather_nyc\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"New York City\\\"}\"}}]},\"requires_action\":{\"type\":\"submit_tool_outputs\",\"submit_tool_outputs\":{\"tool_calls\":[{\"id\":\"call_weather_nyc\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"New York City\\\"}\"}}]}}}"
+  },
+  {
+    "event": "response.completed",
+    "data": "{\"id\":\"resp_tool_123\",\"object\":\"response\",\"created\":1704067200,\"model\":\"o3-mini\",\"choices\":[{\"index\":0,\"finish_reason\":\"tool_calls\"}],\"usage\":{\"prompt_tokens\":20,\"completion_tokens\":0,\"reasoning_tokens\":75,\"total_tokens\":95}}"
+  }
+]
