@@ -89,7 +89,25 @@ export class ReasoningTransformer implements Transformer {
               try {
                 const data = JSON.parse(line.slice(6));
 
-                // Extract reasoning_content from delta
+                // Handle Responses API reasoning.delta events (new format)
+                if (data.delta?.reasoning_content) {
+                  context.appendReasoningContent(data.delta.reasoning_content);
+                  const thinkingChunk = {
+                    ...data,
+                    delta: {
+                      ...data.delta,
+                      thinking: {
+                        content: data.delta.reasoning_content,
+                      },
+                    },
+                  };
+                  delete thinkingChunk.delta.reasoning_content;
+                  const thinkingLine = `data: ${JSON.stringify(thinkingChunk)}\n\n`;
+                  controller.enqueue(encoder.encode(thinkingLine));
+                  return;
+                }
+
+                // Extract reasoning_content from delta (Chat Completions API format)
                 if (data.choices?.[0]?.delta?.reasoning_content) {
                   context.appendReasoningContent(
                     data.choices[0].delta.reasoning_content
@@ -116,7 +134,33 @@ export class ReasoningTransformer implements Transformer {
                   return;
                 }
 
-                // Check if reasoning is complete (when delta has content but no reasoning_content)
+                // Check if reasoning is complete for Responses API (output.delta events)
+                if (
+                  data.delta?.content &&
+                  context.reasoningContent() &&
+                  !context.isReasoningComplete()
+                ) {
+                  context.setReasoningComplete(true);
+                  const signature = Date.now().toString();
+
+                  // Create a new chunk with thinking block
+                  const thinkingChunk = {
+                    ...data,
+                    delta: {
+                      ...data.delta,
+                      content: null,
+                      thinking: {
+                        content: context.reasoningContent(),
+                        signature: signature,
+                      },
+                    },
+                  };
+                  // Send the thinking chunk
+                  const thinkingLine = `data: ${JSON.stringify(thinkingChunk)}\n\n`;
+                  controller.enqueue(encoder.encode(thinkingLine));
+                }
+
+                // Check if reasoning is complete for Chat API (when delta has content but no reasoning_content)
                 if (
                   (data.choices?.[0]?.delta?.content ||
                     data.choices?.[0]?.delta?.tool_calls) &&
@@ -151,11 +195,23 @@ export class ReasoningTransformer implements Transformer {
                   controller.enqueue(encoder.encode(thinkingLine));
                 }
 
+                // Clean up reasoning_content from Responses API deltas
+                if (data.delta?.reasoning_content) {
+                  delete data.delta.reasoning_content;
+                }
+                
+                // Clean up reasoning_content from Chat API deltas
                 if (data.choices?.[0]?.delta?.reasoning_content) {
                   delete data.choices[0].delta.reasoning_content;
                 }
 
-                // Send the modified chunk
+                // Send the modified chunk for Responses API
+                if (data.delta && Object.keys(data.delta).length > 0) {
+                  const modifiedLine = `data: ${JSON.stringify(data)}\n\n`;
+                  controller.enqueue(encoder.encode(modifiedLine));
+                }
+
+                // Send the modified chunk for Chat API
                 if (
                   data.choices?.[0]?.delta &&
                   Object.keys(data.choices[0].delta).length > 0
