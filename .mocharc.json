@@ -1,0 +1,18 @@
+{
+  "require": ["tsx/cjs"],
+  "extensions": ["ts"],
+  "spec": ["test/**/*.test.ts"],
+  "timeout": 10000,
+  "recursive": true,
+  "reporter": "spec",
+  "ui": "bdd",
+  "bail": false,
+  "exit": true,
+  "color": true,
+  "slow": 1000,
+  "diff": true,
+  "inline-diffs": false,
+  "watch-files": ["src/**/*.ts", "test/**/*.ts"],
+  "watch-ignore": ["node_modules/**/*", "dist/**/*"],
+  "grep": ""
+}
