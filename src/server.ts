@@ -135,10 +135,18 @@ class Server {
         done();
       });
 
+      // Provider parsing preHandler - idempotent and precedence-aware
       this.app.addHook(
         "preHandler",
         async (req: FastifyRequest, reply: FastifyReply) => {
           if (req.url.startsWith("/api") || req.method !== "POST") return;
+          
+          // If provider is already set (by CCR or another consumer), skip parsing
+          if (req.provider) {
+            this.app.log.info('🔧 [LLMS DEBUG] Provider already set: %s', req.provider);
+            return;
+          }
+          
           try {
             const body = req.body as any;
             if (!body || !body.model) {
@@ -146,9 +154,32 @@ class Server {
                 .code(400)
                 .send({ error: "Missing model in request body" });
             }
-            const [provider, model] = body.model.split(",");
-            body.model = model;
-            req.provider = provider;
+            
+            // Check header for provider
+            const headerProvider = req.headers["x-llm-provider"] as string;
+            if (headerProvider) {
+              req.provider = headerProvider;
+              this.app.log.info('🔧 [LLMS DEBUG] Provider from header: %s', headerProvider);
+              return;
+            }
+            
+            // Check body for explicit provider field
+            if (body.provider) {
+              req.provider = body.provider;
+              this.app.log.info('🔧 [LLMS DEBUG] Provider from body.provider: %s', body.provider);
+              return;
+            }
+            
+            // Parse from model string if it contains a comma
+            if (body.model && body.model.includes(",")) {
+              const [provider, model] = body.model.split(",");
+              this.app.log.info('🔧 [LLMS DEBUG] Parsed provider: %s, model: %s', provider, model);
+              body.model = model;
+              req.provider = provider;
+            } else {
+              this.app.log.info('🔧 [LLMS DEBUG] No provider in model string: %s', body.model);
+            }
+            
             return;
           } catch (err) {
             req.log.error("Error in modelProviderMiddleware:", err);

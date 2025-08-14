@@ -1,4 +1,5 @@
 import { UnifiedChatRequest } from "@/types/llm";
+import { transformToResponsesRequest } from "./transform/request-transformer";
 
 /**
  * Model capability interface - defines what API and features a model supports
@@ -19,6 +20,12 @@ export interface ModelCapability {
 const MODEL_CATALOG: Map<string, ModelCapability> = new Map([
   // OpenAI Responses API models (GPT-5, o3 series, codex-mini)
   ['gpt-5', {
+    api: 'responses',
+    supports: { tools: true, reasoning: true },
+    sseEvents: ['response.created', 'reasoning.delta', 'output.delta', 'tool_calls', 'response.completed'],
+    usageDims: ['input', 'completion', 'reasoning']
+  }],
+  ['gpt-5-mini', {
     api: 'responses',
     supports: { tools: true, reasoning: true },
     sseEvents: ['response.created', 'reasoning.delta', 'output.delta', 'tool_calls', 'response.completed'],
@@ -90,7 +97,10 @@ export function getModelCapability(model: string): ModelCapability {
     return capability;
   }
 
-  // Check model family patterns
+  // Check model family patterns (check more specific patterns first)
+  if (model.startsWith('gpt-5-mini')) {
+    return MODEL_CATALOG.get('gpt-5-mini')!;
+  }
   if (model.startsWith('gpt-5')) {
     return MODEL_CATALOG.get('gpt-5')!;
   }
@@ -119,63 +129,12 @@ export function transformToProviderRequest(
   capability: ModelCapability
 ): any {
   if (capability.api === 'responses') {
-    return transformToResponsesAPI(request);
+    return transformToResponsesRequest(request);
   } else {
     return transformToChatAPI(request);
   }
 }
 
-/**
- * Transform unified request to OpenAI Responses API format
- */
-function transformToResponsesAPI(request: UnifiedChatRequest): any {
-  const transformedRequest: any = {
-    model: request.model,
-  };
-
-  // Handle messages gracefully
-  if (request.messages && Array.isArray(request.messages)) {
-    transformedRequest.input = request.messages.map(msg => ({
-      role: msg.role,
-      content: msg.content
-    }));
-  } else {
-    // Fallback for malformed requests - provide empty input
-    transformedRequest.input = [];
-  }
-
-  // Transform max_tokens to max_completion_tokens
-  if (request.max_tokens) {
-    transformedRequest.max_completion_tokens = request.max_tokens;
-  }
-
-  // Transform temperature
-  if (request.temperature !== undefined) {
-    transformedRequest.temperature = request.temperature;
-  }
-
-  // Transform stream
-  if (request.stream !== undefined) {
-    transformedRequest.stream = request.stream;
-  }
-
-  // Transform reasoning effort
-  if (request.reasoning?.effort) {
-    transformedRequest.reasoning_effort = request.reasoning.effort;
-  }
-
-  // Transform tools
-  if (request.tools && request.tools.length > 0) {
-    transformedRequest.tools = request.tools;
-  }
-
-  // Transform tool_choice
-  if (request.tool_choice) {
-    transformedRequest.tool_choice = request.tool_choice;
-  }
-
-  return transformedRequest;
-}
 
 /**
  * Transform unified request to OpenAI Chat Completions API format

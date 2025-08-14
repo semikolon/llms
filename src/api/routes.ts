@@ -5,6 +5,7 @@ import {
   FastifyReply,
 } from "fastify";
 import { RegisterProviderRequest, LLMProvider } from "@/types/llm";
+import { Transformer } from "@/types/transformer";
 import { sendUnifiedRequest } from "@/utils/request";
 import { createApiError } from "./middleware";
 import { version } from "../../package.json";
@@ -32,12 +33,67 @@ async function handleTransformerEndpoint(
     );
   }
 
+  // 🔧 [MISMATCH CORRECTION] Check if transformer matches provider
+  fastify.log.info('🚨🚨🚨 [ENTRY POINT UNIQUE XYZ123] Checking transformer match - URL transformer: %s, Provider: %s', transformer.name, providerName);
+  
+  try {
+    // Map provider names to expected transformer names
+    const providerToTransformerMap: { [key: string]: string } = {
+      'openai': 'OpenAI Responses API',
+      'anthropic': 'Anthropic',
+    };
+    
+    const expectedTransformerName = providerToTransformerMap[providerName];
+    fastify.log.info('🚨 [CRITICAL PATH] Provider: %s, Expected transformer: %s', providerName, expectedTransformerName);
+    fastify.log.info('🚨 [CRITICAL PATH] About to check if expectedTransformerName exists...');
+    
+    if (expectedTransformerName) {
+      fastify.log.info('🚨 [CRITICAL PATH] Inside expectedTransformerName conditional!');
+      fastify.log.info('🔧 [LLMS DEBUG] Trying to get all transformers...');
+      try {
+        // Debug: List all registered transformers
+        const allTransformers = fastify._server!.transformerService.getAllTransformers();
+        fastify.log.info('🔧 [LLMS DEBUG] All registered transformers: %s', Array.from(allTransformers.keys()).join(', '));
+      } catch (error: any) {
+        fastify.log.error('🔧 [LLMS DEBUG] Error getting all transformers: %s', error.message);
+      }
+      
+      const correctTransformer = fastify._server!.transformerService.getTransformer(expectedTransformerName);
+      
+      // 🕵️ PHASE 1: Registry inventory logging (GPT-5's #1 recommendation)
+      if (!correctTransformer) {
+        const allTransformers = fastify._server!.transformerService.getAllTransformers();
+        const registeredNames = Array.from(allTransformers.keys()).join(', ');
+        fastify.log.error('🚨 [REGISTRY INVENTORY] Transformer lookup failed!');
+        fastify.log.error('🚨 [REGISTRY INVENTORY] Requested: %s', expectedTransformerName);
+        fastify.log.error('🚨 [REGISTRY INVENTORY] Registered transformers: %s', registeredNames);
+        fastify.log.error('🚨 [REGISTRY INVENTORY] Registry size: %d', allTransformers.size);
+        throw new Error(`Transformer not found: ${expectedTransformerName}; registered: [${registeredNames}]`);
+      }
+      
+      fastify.log.info('🔧 [LLMS DEBUG] Expected transformer for provider: %s, Found: %s', expectedTransformerName, correctTransformer?.name);
+      
+      if (correctTransformer && correctTransformer !== transformer) {
+        fastify.log.warn('🔧 [LLMS DEBUG] MISMATCH DETECTED! URL-selected: %s, Provider needs: %s', transformer.name, correctTransformer.name);
+        // Use the correct transformer for this provider
+        return handleTransformerEndpoint(req, reply, fastify, correctTransformer as Transformer);
+      } else {
+        fastify.log.info('🔧 [LLMS DEBUG] Transformers match - no correction needed');
+      }
+    } else {
+      fastify.log.info('🔧 [LLMS DEBUG] No transformer mapping for provider: %s', providerName);
+    }
+  } catch (error: any) {
+    fastify.log.error('🔧 [LLMS DEBUG] Error in mismatch correction: %s', error.message);
+  }
+
   // 处理请求转换器链
   const { requestBody, config, bypass } = await processRequestTransformers(
     body,
     provider,
     transformer,
-    req.headers
+    req.headers,
+    fastify.log
   );
 
   // 发送请求到LLM提供者
@@ -72,8 +128,10 @@ async function processRequestTransformers(
   body: any,
   provider: any,
   transformer: any,
-  headers: any
+  headers: any,
+  log: any
 ) {
+  log.info('🚀 [ENTRY POINT] processRequestTransformers called with transformer: %s', transformer.name);
   let requestBody = body;
   let config = {};
   let bypass = false;
@@ -91,14 +149,23 @@ async function processRequestTransformers(
   }
 
   // 执行transformer的transformRequestOut方法
-  if (!bypass && typeof transformer.transformRequestOut === "function") {
+  log.info('🔧 [TRANSFORM DEBUG] About to call transformRequestOut - bypass: %s, hasMethod: %s', bypass, typeof transformer.transformRequestOut);
+  if (typeof transformer.transformRequestOut === "function") {
+    log.info('🔧 [TRANSFORM DEBUG] Calling transformRequestOut for transformer: %s', transformer.name);
+    log.info('🔧 [TRANSFORM DEBUG] Original tools count: %d', requestBody.tools?.length || 0);
+    if (requestBody.tools?.length > 0) {
+      log.info('🔧 [TRANSFORM DEBUG] Original first tool sample: %j', requestBody.tools[0]);
+    }
     const transformOut = await transformer.transformRequestOut(requestBody);
+    log.info('🔧 [TRANSFORM DEBUG] Transform completed, result tools count: %d', transformOut.tools?.length || 0);
     if (transformOut.body) {
       requestBody = transformOut.body;
       config = transformOut.config || {};
     } else {
       requestBody = transformOut;
     }
+    log.info('🔧 [TRANSFORM DEBUG] Final request tools count: %d', requestBody.tools?.length || 0);
+    log.info('🔧 [TRANSFORM DEBUG] Final first tool sample: %j', requestBody.tools?.[0] || 'NO_TOOLS');
   }
 
   // 执行provider级别的转换器
@@ -151,12 +218,14 @@ function shouldBypassTransformers(
   transformer: any,
   body: any
 ): boolean {
+  const providerUses = provider.transformer?.use ?? [];
+  const modelUses = provider.transformer?.[body.model]?.use ?? [];
+  
   return (
-    provider.transformer?.use?.length === 1 &&
-    provider.transformer.use[0].name === transformer.name &&
-    (!provider.transformer?.[body.model]?.use.length ||
-      (provider.transformer?.[body.model]?.use.length === 1 &&
-        provider.transformer?.[body.model]?.use[0].name === transformer.name))
+    providerUses.length === 1 &&
+    providerUses[0]?.name === transformer.name &&
+    (modelUses.length === 0 ||
+      (modelUses.length === 1 && modelUses[0]?.name === transformer.name))
   );
 }
 
@@ -172,7 +241,18 @@ async function sendRequestToProvider(
   bypass: boolean,
   transformer: any
 ) {
-  const url = config.url || new URL(provider.baseUrl);
+  // Construct URL using transformer's endpoint if available, otherwise use provider baseUrl
+  let url: URL;
+  if (transformer.endPoint) {
+    // Use transformer's endpoint (e.g., "/v1/responses" for OpenAI Responses API)
+    const baseUrl = new URL(provider.baseUrl);
+    // baseUrl.origin = "https://api.openai.com" (protocol + hostname only)
+    // new URL("/v1/responses", "https://api.openai.com") = "https://api.openai.com/v1/responses"
+    url = new URL(transformer.endPoint, baseUrl.origin);
+  } else {
+    // Fall back to provider's configured baseUrl
+    url = config.url || new URL(provider.baseUrl);
+  }
 
   // 在透传参数下处理认证
   if (bypass && typeof transformer.auth === "function") {
