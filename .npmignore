@@ -1,6 +1,7 @@
 src
 node_modules
 .claude
+.serena
 CLAUDE.md
 screenshoots
 .DS_Store

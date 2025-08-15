@@ -39,7 +39,7 @@ async function handleTransformerEndpoint(
   try {
     // Map provider names to expected transformer names
     const providerToTransformerMap: { [key: string]: string } = {
-      'openai': 'OpenAI Responses API',
+      'openai': 'Anthropic to OpenAI Responses',
       'anthropic': 'Anthropic',
     };
     
