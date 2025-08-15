@@ -5,6 +5,7 @@ import { DeepseekTransformer } from "./deepseek.transformer";
 import { TooluseTransformer } from "./tooluse.transformer";
 import { OpenrouterTransformer } from "./openrouter.transformer";
 import { OpenAIResponsesTransformer } from "./openai-responses.transformer";
+import { AnthropicToOpenAIResponsesTransformer } from "./anthropic-to-openai-responses.transformer";
 import { MaxTokenTransformer } from "./maxtoken.transformer";
 import { GroqTransformer } from "./groq.transformer";
 import { CleancacheTransformer } from "./cleancache.transformer";
@@ -25,6 +26,7 @@ export default {
   TooluseTransformer,
   OpenrouterTransformer,
   OpenAIResponsesTransformer,
+  AnthropicToOpenAIResponsesTransformer,
   MaxTokenTransformer,
   GroqTransformer,
   CleancacheTransformer,
@@ -35,3 +37,6 @@ export default {
   CerebrasTransformer,
   StreamOptionsTransformer
 };
+
+// Named exports for specific transformers
+export { AnthropicToOpenAIResponsesTransformer };
