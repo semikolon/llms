@@ -24,8 +24,6 @@ export class OpenAIResponsesTransformer implements Transformer {
   endPoint = "/v1/responses";
 
   constructor(private readonly options?: TransformerOptions) {
-    console.log('🔧 [CCR DEBUG] OpenAI Responses Transformer loaded!');
-    console.log('🔧 [CCR DEBUG] endPoint set to:', this.endPoint);
   }
 
   /**
@@ -37,46 +35,16 @@ export class OpenAIResponsesTransformer implements Transformer {
   }
 
   async transformRequestOut(request: UnifiedChatRequest): Promise<any> {
-    // Simple debug marker
-    const fs = require('fs');
-    fs.writeFileSync('/tmp/transformer-called', `${new Date().toISOString()}: transformRequestOut called for model ${request.model}`);
-    
     // Use core logic to determine API and transform request
     const capability = getModelCapability(request.model);
     
     // Only transform if model requires Responses API
     if (capability.api !== 'responses') {
-      fs.writeFileSync('/tmp/transformer-skip', `${new Date().toISOString()}: skipping transform, api=${capability.api}`);
       return request;
     }
 
-    // Debug: Log the tools issue
-    try {
-      const debugInfo = {
-        timestamp: new Date().toISOString(),
-        model: request.model,
-        toolsCount: request.tools?.length || 0,
-        firstToolSample: request.tools?.[0] || 'NO_TOOLS'
-      };
-      fs.writeFileSync('/tmp/ccr-tools-debug.log', JSON.stringify(debugInfo, null, 2));
-
-      // Use core transformation logic
-      const transformed = transformToProviderRequest(request, capability);
-      
-      // Debug: Log the transformed tools
-      const transformedInfo = {
-        timestamp: new Date().toISOString(),
-        model: transformed.model,
-        toolsCount: transformed.tools?.length || 0,
-        firstTransformedTool: transformed.tools?.[0] || 'NO_TOOLS'
-      };
-      fs.appendFileSync('/tmp/ccr-tools-debug.log', '\n---TRANSFORMED---\n' + JSON.stringify(transformedInfo, null, 2));
-      
-      return transformed;
-    } catch (error: any) {
-      fs.writeFileSync('/tmp/transformer-error', `${new Date().toISOString()}: Error in transform: ${error.message}`);
-      throw error;
-    }
+    // Use core transformation logic
+    return transformToProviderRequest(request, capability);
   }
 
   async transformResponseIn(response: Response): Promise<Response> {
