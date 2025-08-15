@@ -123,27 +123,32 @@ export class TransformerService {
     try {
       Object.values(Transformers).forEach(
         (TransformerStatic: TransformerConstructor) => {
-          if (
-            "TransformerName" in TransformerStatic &&
-            typeof TransformerStatic.TransformerName === "string"
-          ) {
-            this.registerTransformer(
-              TransformerStatic.TransformerName,
-              TransformerStatic
-            );
-          } else {
-            const transformerInstance = new TransformerStatic();
-            // Set logger for transformer instance
+          try {
             if (
-              transformerInstance &&
-              typeof transformerInstance === "object"
+              "TransformerName" in TransformerStatic &&
+              typeof TransformerStatic.TransformerName === "string"
             ) {
-              (transformerInstance as any).logger = this.logger;
+              this.registerTransformer(
+                TransformerStatic.TransformerName,
+                TransformerStatic
+              );
+            } else {
+              const transformerInstance = new TransformerStatic();
+              
+              // Set logger for transformer instance
+              if (
+                transformerInstance &&
+                typeof transformerInstance === "object"
+              ) {
+                (transformerInstance as any).logger = this.logger;
+              }
+              this.registerTransformer(
+                transformerInstance.name!,
+                transformerInstance
+              );
             }
-            this.registerTransformer(
-              transformerInstance.name!,
-              transformerInstance
-            );
+          } catch (instanceError: any) {
+            this.logger.error({ error: instanceError }, `Failed to register transformer ${TransformerStatic.name}: ${instanceError.message}`);
           }
         }
       );

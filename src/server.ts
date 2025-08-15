@@ -77,14 +77,8 @@ class Server {
       this.configService,
       this.app.log
     );
-    this.transformerService.initialize().finally(() => {
-      this.providerService = new ProviderService(
-        this.configService,
-        this.transformerService,
-        this.app.log
-      );
-      this.llmService = new LLMService(this.providerService);
-    });
+    
+    // Services will be initialized in start() method to ensure proper async handling
   }
 
   // Type-safe register method using Fastify native types
@@ -122,6 +116,15 @@ class Server {
 
   async start(): Promise<void> {
     try {
+      // Initialize services before starting the server
+      await this.transformerService.initialize();
+      this.providerService = new ProviderService(
+        this.configService,
+        this.transformerService,
+        this.app.log
+      );
+      this.llmService = new LLMService(this.providerService);
+
       this.app._server = this;
 
       this.app.addHook("preHandler", (request, reply, done) => {
@@ -143,7 +146,6 @@ class Server {
           
           // If provider is already set (by CCR or another consumer), skip parsing
           if (req.provider) {
-            this.app.log.info('🔧 [LLMS DEBUG] Provider already set: %s', req.provider);
             return;
           }
           
@@ -159,25 +161,20 @@ class Server {
             const headerProvider = req.headers["x-llm-provider"] as string;
             if (headerProvider) {
               req.provider = headerProvider;
-              this.app.log.info('🔧 [LLMS DEBUG] Provider from header: %s', headerProvider);
               return;
             }
             
             // Check body for explicit provider field
             if (body.provider) {
               req.provider = body.provider;
-              this.app.log.info('🔧 [LLMS DEBUG] Provider from body.provider: %s', body.provider);
               return;
             }
             
             // Parse from model string if it contains a comma
             if (body.model && body.model.includes(",")) {
               const [provider, model] = body.model.split(",");
-              this.app.log.info('🔧 [LLMS DEBUG] Parsed provider: %s, model: %s', provider, model);
               body.model = model;
               req.provider = provider;
-            } else {
-              this.app.log.info('🔧 [LLMS DEBUG] No provider in model string: %s', body.model);
             }
             
             return;
