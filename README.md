@@ -44,6 +44,19 @@ The LLM API transformation server acts as a middleware to standardize requests a
 
 ## Run this repo
 
+### Quick Start with GPT-5 fixes
+
+For testing the latest GPT-5 compatibility fixes with Claude Code Router:
+
+```bash
+export OPENAI_API_KEY=sk-...
+curl -fsSL https://raw.githubusercontent.com/semikolon/claude-code-router/main/scripts/quickstart-gpt5.sh | bash
+```
+
+This automatically sets up both LLMS and CCR repositories with the fixes for GPT-5 image handling and tool calling.
+
+### Manual Setup
+
 - **Install dependencies:**
   ```sh
   npm install
