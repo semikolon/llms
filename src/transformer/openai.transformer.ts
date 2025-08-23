@@ -222,6 +222,85 @@ export class OpenAITransformer implements Transformer {
     }
 
     return request;
+    if (request.reasoning) {
+      if (typeof request.reasoning === 'object') {
+        // Convert reasoning.effort to reasoning_effort
+        request.reasoning_effort = request.reasoning.effort ?? "medium";
+        delete request.reasoning; // Remove the invalid format
+      } else if (typeof request.reasoning === 'string') {
+        // Strip any string reasoning parameters too
+        delete request.reasoning;
+      }
+    }
+
+    // Convert Anthropic tool format to OpenAI format
+    if (request.tools) {
+      // Check if tools are already in OpenAI format
+      const isOpenAIFormat = request.tools.every((tool: any) => 
+        tool.function && typeof tool.function === 'object' && 
+        tool.function.name && tool.function.parameters
+      );
+      
+      if (isOpenAIFormat) {
+        // Clean JSON schema metadata that GPT-5 rejects
+        request.tools = request.tools.map((tool: any) => {
+          if (tool.function?.parameters) {
+            const cleanParams = { ...tool.function.parameters };
+            delete cleanParams.$schema;
+            delete cleanParams.additionalProperties;
+            
+            return {
+              ...tool,
+              function: {
+                ...tool.function,
+                parameters: cleanParams
+              }
+            };
+          }
+          return tool;
+        });
+      } else {
+        // Convert from Anthropic format
+        request.tools = request.tools.map((tool: any) => {
+          // Handle custom tools (plaintext type)
+          if (tool.type === "custom") {
+            return {
+              type: "custom",
+              function: {
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.input_schema
+              }
+            };
+          }
+          // Standard function tools
+          return {
+            type: "function",
+            function: {
+              name: tool.name,
+              description: tool.description,
+              parameters: tool.input_schema
+            }
+          };
+        });
+      }
+    }
+
+    // Handle verbosity parameter - ensure it's properly formatted
+    if (request.verbosity && typeof request.verbosity === "string") {
+      // Validate verbosity values
+      if (!["low", "medium", "high"].includes(request.verbosity)) {
+        delete request.verbosity; // Remove invalid values
+      }
+    }
+    
+    // Note: We don't automatically set verbosity based on reasoning_effort
+    // These are independent parameters per OpenAI guidance:
+    // - reasoning_effort controls internal thinking depth
+    // - verbosity controls output length/detail
+    // Let users explicitly control verbosity or use API default (medium)
+
+    return request;
   }
 
   async transformResponseOut(response: Response): Promise<Response> {
