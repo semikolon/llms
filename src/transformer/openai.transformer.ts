@@ -221,7 +221,8 @@ export class OpenAITransformer implements Transformer {
       request.messages = this.normalizeToolMessages(request.messages);
     }
 
-    return request;
+    
+    // Handle reasoning parameter conversion
     if (request.reasoning) {
       if (typeof request.reasoning === 'object') {
         // Convert reasoning.effort to reasoning_effort

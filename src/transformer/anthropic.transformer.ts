@@ -877,6 +877,16 @@ export class AnthropicTransformer implements Transformer {
     openaiResponse: ChatCompletion
   ): any {
     this.logger.debug({ response: openaiResponse }, `Original OpenAI response`);
+    
+    // 🔧 DEBUG: Log usage data specifically
+    this.logger.info({
+      hasUsage: !!openaiResponse.usage,
+      usageData: openaiResponse.usage,
+      promptTokens: openaiResponse.usage?.prompt_tokens,
+      completionTokens: openaiResponse.usage?.completion_tokens,
+      totalTokens: openaiResponse.usage?.total_tokens
+    }, "🔍 OpenAI Usage Debug - Anthropic Transformer");
+    
     try {
       const choice = openaiResponse.choices[0];
       if (!choice) {
@@ -935,6 +945,17 @@ export class AnthropicTransformer implements Transformer {
         });
       }
 
+      const inputTokens = openaiResponse.usage?.prompt_tokens || 0;
+      const outputTokens = openaiResponse.usage?.completion_tokens || 0;
+      
+      // 🔧 DEBUG: Log the conversion
+      this.logger.info({
+        originalUsage: openaiResponse.usage,
+        convertedUsage: { input_tokens: inputTokens, output_tokens: outputTokens },
+        conversion: `${openaiResponse.usage?.prompt_tokens} prompt_tokens → ${inputTokens} input_tokens`,
+        conversion2: `${openaiResponse.usage?.completion_tokens} completion_tokens → ${outputTokens} output_tokens`
+      }, "✅ Anthropic Usage Conversion Complete");
+
       const result = {
         id: openaiResponse.id,
         type: "message",
@@ -953,8 +974,8 @@ export class AnthropicTransformer implements Transformer {
             : "end_turn",
         stop_sequence: null,
         usage: {
-          input_tokens: openaiResponse.usage?.prompt_tokens || 0,
-          output_tokens: openaiResponse.usage?.completion_tokens || 0,
+          input_tokens: inputTokens,
+          output_tokens: outputTokens,
         },
       };
       this.logger.debug(
