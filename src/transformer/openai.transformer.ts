@@ -25,10 +25,22 @@ export class OpenAITransformer implements Transformer {
     
     // Handle image_url type with extra fields
     if (content.type === 'image_url') {
+      let url = content.image_url?.url || content.url;
+      
+      // Ensure base64 images have proper data URI format
+      if (url && !url.startsWith('http') && !url.startsWith('data:')) {
+        // Raw base64 data - need to add data URI prefix
+        // Try to detect image type from base64 signature
+        const isPng = url.startsWith('iVBORw0KGgo');
+        const isJpeg = url.startsWith('/9j/');
+        const mediaType = isPng ? 'image/png' : isJpeg ? 'image/jpeg' : 'image/png';
+        url = `data:${mediaType};base64,${url}`;
+      }
+      
       const normalized = {
         type: 'image_url',
         image_url: {
-          url: content.image_url?.url || content.url,
+          url: url,
           detail: content.image_url?.detail || 'high'
         }
       };
