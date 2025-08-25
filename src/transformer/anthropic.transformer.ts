@@ -884,7 +884,11 @@ export class AnthropicTransformer implements Transformer {
       usageData: openaiResponse.usage,
       promptTokens: openaiResponse.usage?.prompt_tokens,
       completionTokens: openaiResponse.usage?.completion_tokens,
-      totalTokens: openaiResponse.usage?.total_tokens
+      totalTokens: openaiResponse.usage?.total_tokens,
+      // Also check for already-converted format
+      inputTokens: openaiResponse.usage?.input_tokens,
+      outputTokens: openaiResponse.usage?.output_tokens,
+      hasOpenAIOriginal: !!openaiResponse.usage?._openai_original
     }, "🔍 OpenAI Usage Debug - Anthropic Transformer");
     
     try {
@@ -945,16 +949,44 @@ export class AnthropicTransformer implements Transformer {
         });
       }
 
-      const inputTokens = openaiResponse.usage?.prompt_tokens || 0;
-      const outputTokens = openaiResponse.usage?.completion_tokens || 0;
+      // 🔧 FIX: Handle both raw OpenAI format and already-converted format
+      let inputTokens = 0;
+      let outputTokens = 0;
       
-      // 🔧 DEBUG: Log the conversion
+      if (openaiResponse.usage) {
+        // Check if already converted by OpenAI transformer (has input_tokens/output_tokens)
+        if (openaiResponse.usage.input_tokens !== undefined && openaiResponse.usage.output_tokens !== undefined) {
+          // Already converted format - use as-is
+          inputTokens = openaiResponse.usage.input_tokens;
+          outputTokens = openaiResponse.usage.output_tokens;
+          
+          this.logger.info({
+            message: "Using already-converted usage format",
+            inputTokens,
+            outputTokens
+          }, "✅ Anthropic Usage - Already Converted");
+        } else {
+          // Raw OpenAI format - convert it
+          inputTokens = openaiResponse.usage.prompt_tokens || 0;
+          outputTokens = openaiResponse.usage.completion_tokens || 0;
+          
+          this.logger.info({
+            message: "Converting raw OpenAI usage format",
+            originalPromptTokens: openaiResponse.usage.prompt_tokens,
+            originalCompletionTokens: openaiResponse.usage.completion_tokens,
+            convertedInputTokens: inputTokens,
+            convertedOutputTokens: outputTokens
+          }, "✅ Anthropic Usage - Raw Conversion");
+        }
+      } else {
+        this.logger.warn("No usage data found in OpenAI response", "⚠️ Anthropic Usage - Missing");
+      }
+      
+      // 🔧 DEBUG: Log the final conversion
       this.logger.info({
-        originalUsage: openaiResponse.usage,
-        convertedUsage: { input_tokens: inputTokens, output_tokens: outputTokens },
-        conversion: `${openaiResponse.usage?.prompt_tokens} prompt_tokens → ${inputTokens} input_tokens`,
-        conversion2: `${openaiResponse.usage?.completion_tokens} completion_tokens → ${outputTokens} output_tokens`
-      }, "✅ Anthropic Usage Conversion Complete");
+        finalUsage: { input_tokens: inputTokens, output_tokens: outputTokens },
+        wasConverted: inputTokens > 0 || outputTokens > 0
+      }, "✅ Anthropic Usage Final Result");
 
       const result = {
         id: openaiResponse.id,
