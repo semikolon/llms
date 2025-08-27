@@ -1,5 +1,6 @@
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
+import { homedir } from "os";
 import { config } from "dotenv";
 import JSON5 from 'json5';
 
@@ -56,6 +57,16 @@ export class ConfigService {
 
     if (this.config.LOG_FILE) {
       process.env.LOG_FILE = this.config.LOG_FILE;
+    } else {
+      const h = homedir();
+      const ccrDir = join(h, ".claude-code-router", "logs");
+      const llmsDir = join(h, ".llms", "logs");
+      const d = new Date();
+      const p = (n: number) => String(n).padStart(2, "0");
+      const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+      const baseDir = existsSync(ccrDir) ? ccrDir : llmsDir;
+      if (!existsSync(baseDir) && baseDir === llmsDir) mkdirSync(baseDir, { recursive: true });
+      process.env.LOG_FILE = join(baseDir, `llms-${stamp}.log`);
     }
     if (this.config.LOG) {
       process.env.LOG = this.config.LOG;
