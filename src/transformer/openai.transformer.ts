@@ -146,45 +146,62 @@ export class OpenAITransformer implements Transformer {
 
     // 4. Convert Anthropic tool format to OpenAI format
     if (request.tools) {
-      // ENHANCED DEBUG: Log full tool structure for troubleshooting
+      // CRITICAL DEBUG: Log the EXACT tool format being received
       this.logger?.info({
         toolCount: request.tools.length,
-        toolFormats: request.tools.map((tool: any, i: number) => ({
-          index: i,
-          name: tool.name,
-          type: tool.type,
-          hasFunction: !!tool.function,
-          hasInputSchema: !!tool.input_schema,
-          hasParameters: !!tool.parameters,
-          keys: Object.keys(tool),
-          fullTool: tool // Log the complete tool structure
-        }))
-      }, "🔧 ENHANCED Tool format analysis");
+        rawTools: JSON.stringify(request.tools, null, 2),
+        hasWebSearch: request.tools.some((t: any) => t.name === "WebSearch")
+      }, "🚨 DEBUGGING WebSearch: RAW TOOLS received from Claude Code");
 
-      // Check if tools are already in OpenAI format
+      // Log tool conversion for debugging
+      this.logger?.info({
+        toolCount: request.tools.length,
+        toolNames: request.tools.map((t: any) => t.name).join(", "),
+        hasWebSearch: request.tools.some((t: any) => t.name === "WebSearch")
+      }, "🔧 Converting tools from Anthropic to OpenAI format");
+
+      // Check if tools are already in OpenAI format (parameters are optional)
       const isOpenAIFormat = request.tools.every((tool: any) => 
         tool.function && typeof tool.function === 'object' && 
-        tool.function.name && tool.function.parameters
+        tool.function.name
       );
       
       if (isOpenAIFormat) {
         this.logger?.info("Tools already in OpenAI format, cleaning JSON schema metadata");
-        // Clean JSON schema metadata that GPT-5 rejects
-        request.tools = request.tools.map((tool: any) => {
-          if (tool.function?.parameters) {
-            const cleanParams = { ...tool.function.parameters };
-            delete cleanParams.$schema;
-            delete cleanParams.additionalProperties;
+        // Clean JSON schema metadata that GPT-5 rejects - must be recursive
+        const cleanSchemaMetadata = (obj: any): any => {
+          if (Array.isArray(obj)) {
+            return obj.map(cleanSchemaMetadata);
+          } else if (obj && typeof obj === 'object') {
+            const cleaned = { ...obj };
+            delete cleaned.$schema;
+            delete cleaned.additionalProperties;
             
-            return {
-              ...tool,
-              function: {
-                ...tool.function,
-                parameters: cleanParams
+            // Recursively clean nested objects
+            for (const key in cleaned) {
+              if (cleaned[key] && typeof cleaned[key] === 'object') {
+                cleaned[key] = cleanSchemaMetadata(cleaned[key]);
               }
-            };
+            }
+            return cleaned;
           }
-          return tool;
+          return obj;
+        };
+        
+        request.tools = request.tools.map((tool: any) => {
+          return {
+            ...tool,
+            function: {
+              ...tool.function,
+              parameters: tool.function?.parameters 
+                ? cleanSchemaMetadata(tool.function.parameters)
+                : {
+                    type: "object",
+                    properties: {},
+                    required: []
+                  }
+            }
+          };
         });
       } else {
         this.logger?.info("Converting tools from Anthropic/Claude Code format to OpenAI format");
@@ -228,22 +245,58 @@ export class OpenAITransformer implements Transformer {
           }
           
           // Standard Anthropic function tools
+          let toolName = tool.name || tool.function?.name;
+          let toolDescription = tool.description || tool.function?.description || `Execute ${toolName}`;
+          let toolParameters = tool.input_schema || tool.parameters || tool.function?.parameters || {
+            type: "object",
+            properties: {},
+            required: []
+          };
+          
+          // Special handling for Claude Code's WebSearch tool
+          if (toolName === 'web_search' || toolName === 'WebSearch') {
+            toolDescription = toolDescription || "Search the web for information";
+            // If parameters are empty, add the proper schema
+            if (!toolParameters.properties || Object.keys(toolParameters.properties).length === 0) {
+              toolParameters = {
+                type: "object",
+                properties: {
+                  query: {
+                    type: "string",
+                    description: "The search query"
+                  },
+                  allowed_domains: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Optional list of domains to restrict search to"
+                  },
+                  blocked_domains: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Optional list of domains to exclude from search"
+                  }
+                },
+                required: ["query"]
+              };
+            }
+          }
+          
           const converted = {
             type: "function",
             function: {
-              name: tool.name,
-              description: tool.description,
-              parameters: tool.input_schema
+              name: toolName,
+              description: toolDescription,
+              parameters: toolParameters
             }
           };
-          this.logger?.info({ converted }, `✅ Converted Anthropic tool: ${tool.name}`);
+          this.logger?.info({ converted }, `✅ Converted Anthropic tool: ${tool.name || tool.function?.name}`);
           return converted;
         });
       }
 
       // FINAL DEBUG: Log the final converted tools
       this.logger?.info({
-        convertedTools: request.tools,
+        convertedTools: JSON.stringify(request.tools, null, 2),
         toolValidation: request.tools.map((tool: any, i: number) => ({
           index: i,
           hasType: !!tool.type,
@@ -252,8 +305,16 @@ export class OpenAITransformer implements Transformer {
           hasFunctionParameters: !!tool.function?.parameters,
           isValid: !!(tool.function?.name && tool.function?.parameters)
         }))
-      }, "🎯 FINAL converted tools validation");
+      }, "🎯 FINAL converted tools validation - THIS GOES TO OPENAI");
     }
+
+    // ABSOLUTE FINAL DEBUG: Log the complete request going to OpenAI
+    this.logger?.info({
+      finalRequestKeys: Object.keys(request),
+      hasTools: !!request.tools,
+      toolCount: request.tools?.length || 0,
+      model: request.model
+    }, "🚀 COMPLETE REQUEST being sent to OpenAI API");
 
     // 5. Handle verbosity parameter - ensure it's properly formatted
     if (request.verbosity && typeof request.verbosity === "string") {

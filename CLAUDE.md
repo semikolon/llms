@@ -52,61 +52,45 @@ This is a universal LLM API transformation server that acts as middleware to sta
 
 ## Logging & Debugging
 
-### LLMS Package Logging Strategy
-
-**Primary Logger: Fastify Pino Logger**
-- Uses industry-standard Pino logger integrated with Fastify
+**LLMS Fastify Pino Logger:**
 - Available as `this.logger` in transformer instances (injected by TransformerService)
-- Configured in `src/server.ts` with PinoLoggerOptions
+- Usage: `this.logger.info({ requestData }, 'Processing request');`
 - Default: enabled with structured JSON logging
 
-**Logger Usage in Transformers:**
-```typescript
-// Transformers receive logger injection from TransformerService
-if (this.logger) {
-  this.logger.info({ requestData }, 'Processing request');
-  this.logger.error({ error }, 'Transformation failed');
-}
-```
-
-**Emergency/Debug Logging:**
-- File-based logging to `/tmp/` for critical debugging
-- Console.log statements in `src/utils/request.ts` for HTTP egress debugging
-- Use sparingly and clean up after debugging sessions
-
-**CCR (Claude Code Router) Logging Strategy**
-
-**Primary Logger: Custom File Logger**
+**CCR Custom File Logger:**
 - Location: `~/.claude-code-router/claude-code-router.log`
-- Implemented in `src/utils/log.ts`
-- Configurable via config.json: `{"LOG": true, "LOG_LEVEL": "debug"}`
-- Default: LOG=false (disabled by default)
+- Enable: Edit config.json with `{"LOG": true, "LOG_LEVEL": "debug"}` then `ccr restart`
+- Usage: `import { log } from './utils/log'; log('Message', { data });`
 
-**CCR Logger Usage:**
-```typescript
-import { log } from './utils/log';
-log('Message', { data }, 'additional info');
-```
+**Development Debugging:**
+- Use temporary file logging to `/tmp/` for detailed request/response inspection
+- Console.log works but output captured by CCR service (use for testing only)
+- Clean up all debug code before committing
 
-**To Enable CCR Logging:**
-1. Edit `~/.claude-code-router/config.json`:
-   ```json
-   {"LOG": true, "LOG_LEVEL": "debug"}
-   ```
-2. Restart CCR: `ccr restart`
-3. Monitor logs: `tail -f ~/.claude-code-router/claude-code-router.log`
-
-**When to Use Each Logging Method:**
-
-1. **LLMS Fastify Logger** - Production code, transformer operations, service events
-2. **LLMS File Debug Logs** - Temporary debugging, HTTP request/response analysis
-3. **CCR File Logger** - Router operations, request routing decisions, service lifecycle
-4. **Console.log** - Only for development, remove before commit
+**Error Handling:**
+- Server startup errors are re-thrown (not process.exit()) for proper error bubbling
+- Use `console.error()` for startup failures to ensure visibility in consuming applications
 
 **Debugging GPT-5 Issues:**
 - Check LLMS transformer logs for parameter transformations
 - Check CCR logs for routing decisions and model selection
-- Use temporary file logging in `/tmp/` for detailed request/response inspection
+
+**LLMS Transformer Debug Logs Location:**
+- **Location**: Rotating log files at `~/.claude-code-router/logs/ccr-*.log`  
+- **Access**: Search for emoji markers to find transformation debug logs:
+  - 🚨 `RAW TOOLS received from Claude Code` - Shows exact tool format from Claude Code
+  - 🔧 `Converting tools from Anthropic to OpenAI format` - Tool conversion process
+  - 🎯 `FINAL converted tools validation` - Validation of converted tools
+  - 🚀 `COMPLETE REQUEST being sent to OpenAI API` - Final request to OpenAI
+- **Command**: `grep -n "🚨\|🔧\|🎯\|🚀" ~/.claude-code-router/logs/ccr-*.log`
+
+**WebSearch Tool Debugging Results (2025-01-26):**
+The WebSearch tool failure was caused by JSON schema metadata in tool parameters that GPT-5 rejects:
+- **Root Cause**: Claude Code sends tools with `$schema` and `additionalProperties` fields
+- **Error**: `Missing required parameter: 'tools[0].function.name'` (misleading - actual issue is schema validation)
+- **Solution**: OpenAI transformer now strips JSON schema metadata before sending to GPT-5
+- **Debug Evidence**: Found in logs at `ccr-1756235256784.log:28-31` showing 70 tools with schema metadata
+- **Status**: Fixed in OpenAI transformer `src/transformer/openai.transformer.ts:172-187`
 
 ## Build System
 
@@ -238,36 +222,35 @@ This server has **complete support for GPT-5 and o3 models** through OpenAI's Ch
 - **OpenAI Chat Completions API**: Uses standard `/v1/chat/completions` endpoint
 - **Automatic Model Mapping**: OpenAI automatically serves GPT-5 for all model requests (GPT-4o, GPT-4, etc. all resolve to GPT-5)
 
-### 🔧 GPT-5 API Quirks & Critical Fixes
+### 🔧 GPT-5 API Quirks & Fixes
 
-**Parameter Compatibility Issues:**
-1. **max_tokens → max_completion_tokens**: GPT-5 requires `max_completion_tokens` instead of legacy `max_tokens`
-2. **Temperature Restrictions**: GPT-5 only supports `temperature: 1` (default), rejects other values
-3. **Reasoning Format**: Only accepts `reasoning_effort: "minimal|low|medium|high"`, rejects object formats
+**Critical Parameter Issues & Solutions:**
+
+1. **Parameter Mapping**: GPT-5 uses `max_completion_tokens` instead of `max_tokens` - OpenAI transformer automatically converts for GPT-5/o3 models
+
+2. **Reasoning Parameter Format**: GPT-5 expects `reasoning_effort: "minimal|low|medium|high"` (string), not `reasoning: {effort: "...", enabled: true}` (object) - OpenAI transformer converts reasoning objects to reasoning_effort strings
+
+3. **Temperature Restriction**: GPT-5 only supports temperature value of 1 (default) - OpenAI transformer removes non-default temperature values
+
 4. **Verbosity Validation**: Strictly validates `verbosity: "low|medium|high"`, rejects invalid values
-5. **Tool Schema Cleaning**: Rejects JSON schema metadata (`$schema`, `additionalProperties`) in tool parameters
+
+5. **Tool Schema Cleaning**: Rejects JSON schema metadata (`$schema`, `additionalProperties`) in tool parameters - Tool format cleaner removes problematic JSON schema fields
+
+6. **Custom Tools Support**: GPT-5 supports `type: "custom"` tools for plaintext payloads - OpenAI transformer preserves custom tool types while converting standard tools
+
+7. **Tool Format Conversion**: Anthropic vs OpenAI tool formats differ - OpenAI transformer converts Anthropic `input_schema` to OpenAI `parameters`
 
 **API Response Differences:**
-- **Reasoning Tokens**: GPT-5 includes significant `reasoning_tokens` in usage (often 2000+ vs 500 for o3/o4-mini)  
-- **Reasoning Content**: Available inline during streaming via `reasoning_content` field
+- **Reasoning Tokens**: GPT-5 includes significant `reasoning_tokens` in usage (often 1000+ vs 300 for GPT-4)
+- **Reasoning Content**: Available inline during streaming via `reasoning_content` field  
 - **Model ID**: Returns `gpt-5-2025-08-07` instead of requested model names
 - **Error Sensitivity**: Stricter validation than earlier 2025 models (o3, o4-mini)
 
-**Working Solutions Implemented:**
-- OpenAI transformer auto-converts `max_tokens` → `max_completion_tokens`
-- Reasoning transformer handles all parameter format conversions
-- Tool format cleaner removes problematic JSON schema fields
-- Parameter validation ensures API compliance with latest requirements
-
-**Evolution from Earlier 2025 Models:**
+**Performance vs Earlier 2025 Models:**
 - **vs o3/o4-mini**: GPT-5 uses unified architecture vs specialized reasoning focus
-- **Parameter Changes**: New `reasoning_effort` format vs o3's reasoning approach
-- **Tool Integration**: GPT-5 supports agentic tool use vs o3's limited tool capabilities  
-- **Performance**: 50-80% fewer tokens for same quality vs o3, 6x fewer hallucinations
-- **Timeout Behavior**: Reasoning responses can take longer due to enhanced thinking depth
-- **Parameter Transformation**: Automatic conversion of `max_tokens` → `max_completion_tokens` for GPT-5 models
-- **Tool Format Conversion**: OpenAI transformer converts Anthropic tool format to OpenAI function format
-- **Reasoning Token Support**: GPT-5 reasoning tokens are generated and counted in usage statistics
+- **Tool Integration**: GPT-5 supports agentic tool use vs o3's limited tool capabilities
+- **Performance**: 50% fewer tool calling errors and can chain dozens of tool calls reliably
+- **Efficiency**: 50-80% fewer tokens for same quality vs o3, 6x fewer hallucinations
 
 ### 🔧 Technical Architecture
 - **Transformer Chain**: `AnthropicRequest → UnifiedRequest → OpenAIRequest → OpenAI API`
@@ -309,66 +292,6 @@ GPT-5 integration is **production ready** with the following caveats:
 }
 ```
 
-### 🔧 GPT-5 API Quirks & Fixes
-
-Our implementation handles all major OpenAI API quirks and parameter differences for GPT-5 models:
-
-#### 1. **Parameter Mapping** ✅
-- **Issue**: GPT-5 uses `max_completion_tokens` instead of `max_tokens`
-- **Solution**: OpenAI transformer automatically converts for GPT-5/o3 models
-- **Location**: `src/transformer/openai.transformer.ts:20-23`
-
-#### 2. **Reasoning Parameter Format** ✅  
-- **Issue**: GPT-5 expects `reasoning_effort: "minimal|low|medium|high"` (string), not `reasoning: {effort: "...", enabled: true}` (object)
-- **Solution**: OpenAI transformer converts reasoning objects to reasoning_effort strings and removes invalid reasoning objects
-- **Location**: `src/transformer/openai.transformer.ts:31-42`
-
-#### 3. **Temperature Restriction** ✅
-- **Issue**: GPT-5 only supports temperature value of 1 (default)
-- **Solution**: OpenAI transformer removes non-default temperature values for GPT-5 models
-- **Location**: `src/transformer/openai.transformer.ts:25-28`
-
-#### 4. **Custom Tools Plaintext Support** ✅
-- **Issue**: GPT-5 supports `type: "custom"` tools for plaintext payloads instead of JSON
-- **Solution**: OpenAI transformer preserves custom tool types while converting standard tools
-- **Location**: `src/transformer/openai.transformer.ts:49-57`
-
-#### 5. **Reasoning Tokens in Response** ✅
-- **Issue**: GPT-5 includes `reasoning_tokens` in `completion_tokens_details` that significantly increase token usage
-- **Solution**: OpenAI transformer preserves reasoning token information in responses
-- **Location**: `src/transformer/openai.transformer.ts:84-92`
-
-#### 6. **Tool Format Conversion** ✅
-- **Issue**: Anthropic vs OpenAI tool formats differ  
-- **Solution**: OpenAI transformer converts Anthropic `input_schema` to OpenAI `parameters`
-- **Location**: `src/transformer/openai.transformer.ts:46-69`
-
-#### 7. **Model Detection for Parameter Mapping** ✅
-- **Issue**: Only specific models require new parameter formats
-- **Solution**: OpenAI transformer detects GPT-5/o3 models: `['gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'o3', 'o3-mini', 'o3-pro', 'o4-mini']`
-- **Location**: `src/transformer/openai.transformer.ts:12-15`
-
-### 📝 Key Documentation Insights
-- **Token Usage**: GPT-5 models include significant reasoning tokens (can be 1000+ tokens vs 300 for GPT-4)
-- **API Preference**: OpenAI recommends Responses API over Chat Completions for GPT-5, but we use Chat Completions for Claude Code compatibility
-- **Breaking Changes**: GPT-5 introduced multiple parameter changes that make prior functions incompatible
-- **Performance**: GPT-5 has 50% fewer tool calling errors and can chain dozens of tool calls reliably
-
-### ⚠️ Known Issues & Fixes
-
-**GPT-5 Reasoning Parameter Bug (Resolved):**
-- **Issue**: Anthropic transformer creates invalid `reasoning = {effort: X, enabled: Y}` object
-- **OpenAI Requirement**: Only accepts `reasoning_effort = "minimal|low|medium|high"` string  
-- **Fix Applied**: Remove faulty thinking→reasoning conversion from Anthropic transformer
-- **Location**: `/src/transformer/anthropic.transformer.ts:159-165`
-
-**Architecture Separation:**
-- **LLMS**: Handles all provider-specific transformations
-- **CCR**: Handles routing decisions only
-- **No Overlap**: CCR should never do provider transformations
-
-### ✅ Production Readiness
-GPT-5 integration is **production ready** for use with Claude Code Router. The reasoning parameter issue has been identified and resolved through proper transformer separation.
 
 ## Local Package Development & Caching Issues
 
@@ -444,77 +367,3 @@ node -e "console.log(require.resolve('@musistudio/llms'))"
 ### Why This Happens
 NPM's caching system is designed for performance with published packages, but local file: dependencies can create edge cases where caches aren't properly invalidated when the source files change.
 
-## Unified Logging Strategy
-
-This project uses **Fastify Pino** for structured production logging. Here's the complete logging strategy for both LLMS and CCR projects:
-
-### 🏗️ LLMS Project Logging (This Package)
-
-**Primary: Fastify Pino Logger**
-```typescript
-// In transformers: this.logger is available
-this.logger.info({ 
-  transformerName: "openai", 
-  requestId: req.id,
-  data: relevantData 
-}, "Human-readable message");
-
-this.logger.error({ error: err, context: additionalContext }, "Error description");
-this.logger.debug({ details: debugInfo }, "Debug information");
-```
-
-**Configuration:**
-- Default: enabled with structured JSON logging
-- Access via `this.logger` in transformer classes
-- Configured in main server setup
-- Supports log levels: trace, debug, info, warn, error, fatal
-
-### 🏗️ CCR Project Logging (Consumer)
-
-**Primary: Custom File Logger**
-- File-based logging to `~/.claude-code-router/claude-code-router.log`
-- Controlled by config.json: `{"LOG": true, "LOG_LEVEL": "debug"}`
-- Rotates logs automatically
-- Used for request/response debugging and service monitoring
-
-### 🛠️ Development & Debug Logging
-
-**Emergency Debugging (Temporary Use Only):**
-- Use temporary file logging in `/tmp/` for detailed request/response inspection
-- Console.log works but output captured by CCR service (not visible in terminal)
-- Clean up all debug logging before committing code
-
-**Example Emergency Debug Pattern:**
-```typescript
-// TEMPORARY - Remove before commit
-const fs = require('fs');
-fs.appendFileSync('/tmp/debug-transformer.log', 
-  `[${new Date().toISOString()}] ${JSON.stringify(data, null, 2)}\n`);
-```
-
-### 📊 Best Practices
-
-**Production Code:**
-1. **Use Fastify logger** (`this.logger`) in all transformer classes
-2. **Structured logging** with relevant context objects
-3. **Appropriate log levels** (info for normal operations, error for failures, debug for diagnostics)
-4. **No console.log** in production code
-
-**Development:**
-1. **File logging to /tmp/** for temporary debugging
-2. **Clean up all debug code** before committing
-3. **Use git status** to verify no debug files left behind
-
-**Cross-Project Communication:**
-- LLMS logs don't automatically appear in CCR logs (by design)
-- Each service maintains independent logging for modularity
-- Use correlation IDs for tracing requests across services
-
-### 🔍 Verified Working Mechanisms
-
-✅ **Fastify Pino Logger**: Available in transformers via `this.logger`  
-✅ **CCR File Logger**: Writes to `~/.claude-code-router/claude-code-router.log`  
-✅ **Emergency File Logging**: Temporary debugging to `/tmp/` files  
-✅ **Console.log**: Works but captured by CCR service (use for testing only)
-
-This unified approach provides structured production logging while maintaining flexibility for development debugging.

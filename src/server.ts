@@ -120,6 +120,12 @@ class Server {
     this.app.addHook(hookName as any, hookFunction);
   }
 
+  /**
+   * Start the LLMS server
+   * 
+   * Error handling: Throws errors with context instead of calling process.exit()
+   * to allow consuming applications (like CCR) to handle failures properly.
+   */
   async start(): Promise<void> {
     try {
       this.app._server = this;
@@ -159,9 +165,12 @@ class Server {
 
       this.app.register(registerApiRoutes);
 
+      const port = parseInt(this.configService.get("PORT") || "3000", 10);
+      const host = this.configService.get("HOST") || "127.0.0.1";
+      
       const address = await this.app.listen({
-        port: parseInt(this.configService.get("PORT") || "3000", 10),
-        host: this.configService.get("HOST") || "127.0.0.1",
+        port,
+        host,
       });
 
       this.app.log.info(`🚀 LLMs API server listening on ${address}`);
@@ -174,9 +183,11 @@ class Server {
 
       process.on("SIGINT", () => shutdown("SIGINT"));
       process.on("SIGTERM", () => shutdown("SIGTERM"));
-    } catch (error) {
+    } catch (error: any) {
+      console.error(`❌ LLMS Server startup failed: ${error.message}`);
+      console.error("Stack trace:", error.stack);
       this.app.log.error(`Error starting server: ${error}`);
-      process.exit(1);
+      throw error; // Re-throw instead of exit to let caller handle
     }
   }
 }
